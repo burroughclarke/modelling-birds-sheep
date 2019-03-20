@@ -24,7 +24,6 @@ to setup
   create-predators number-of-predators [
     setxy 3 3
     set size 5
-    set color blue
   ]
 
   reset-ticks
@@ -35,15 +34,15 @@ to go
 
   ask birds [
 
-    ;; the bird checks for predators ...
+    ;; (1) the bird checks for predators ...
     set predamates predators in-radius vision
 
-    ;; ... if bird sees a predator, activate the 'flight' response
+    ;; (2A) ... if bird sees predator, activate 'flee' response
     if any? predamates [
       set color red
       flee
     ]
-    ;; ... if bird cannot see any predators, stick to normal 'stay with the group' pattern
+    ;; (2B) ... if bird cannot see predators, stick to normal 'stay with the group' pattern
     if count predamates = 0 [
       set color yellow
       flock
@@ -51,6 +50,7 @@ to go
 
     fd bird-speed
   ]
+
   ;; The behaviour of the predator is VERY different if it moves at the SAME speed as the birds:
   ;; if it moves at the same speed, it can purse
   ;; the same bird for a long time, resulting it in NOT changing course
@@ -59,21 +59,21 @@ to go
 
   ask predators [
 
-     ;; predator compares ALL the birds
-     set flockmates other birds ;; !! just birds, not predators
+     ;; (1) predator compares ALL the birds (not the other predators)
+     set flockmates other birds
 
-     ;; predator selects the CLOSEST bird
+     ;; (2) predator selects the CLOSEST bird
      set nearest-neighbor min-one-of flockmates [distance myself] ;;  'nearest-neighbor' is a BIRD not a NUMBER
 
-     ;; predator CALCULATES ANGLE towards closes bird
+     ;; (3) predator CALCULATES ANGLE towards closes bird
      let x-component [sin (towards myself + 180)] of nearest-neighbor
      let y-component [cos (towards myself + 180)] of nearest-neighbor
      let result atan x-component y-component
 
-     ;; predator TURNS TOWARDS closest bird
+     ;; (4) predator TURNS TOWARDS closest bird
      turn-towards result predator-target-turn
 
-     ;; display the exact bird the predator is targeting (toggle switch)
+     ;; (5) display the exact bird the predator is targeting
      if count links > 0 [
        ask one-of links [ die ]
      ]
@@ -81,11 +81,31 @@ to go
        create-link-with nearest-neighbor
      ]
 
-    fd predator-speed
+     ;; (6) Move the predator forward. all previous calculations were about the DIRECTION it is facing
+     fd predator-speed
   ]
 
   tick
 end
+
+
+to flee
+
+   ;; (1) bird identifies the NEAREST predator
+   set nearest-predator min-one-of predamates [distance myself]
+
+   ;; (2) bird gets ANGLE of nearest predator
+   let x-component [sin (towards myself + 180)] of nearest-predator
+   let y-component [cos (towards myself + 180)] of nearest-predator
+   let angle-to-predator atan x-component y-component
+
+   ;; (3) bird TURNS AWAY from predator as far as it can (as defined by 'max-seperate-turn')
+   turn-towards (angle-to-predator + 180) max-separate-turn
+end
+
+
+
+                       ;; ##### default functions from 'flocking' example #######
 
 to flock  ;; turtle procedure
   find-flockmates
@@ -98,22 +118,6 @@ to flock  ;; turtle procedure
           cohere ]
     ]
 end
-
-;;; FLEE
-to flee
-
-   ;; #1: bird identifies the NEAREST predator
-   set nearest-predator min-one-of predamates [distance myself]
-
-   ;; #2: bird gets ANGLE of nearest predator
-   let x-component [sin (towards myself + 180)] of nearest-predator
-   let y-component [cos (towards myself + 180)] of nearest-predator
-   let angle-to-predator atan x-component y-component
-
-   ;; #3: bird TURNS AWAY from predator as fast as it can (as defined by 'max-seperate-turn')
-   turn-towards (angle-to-predator + 180) max-separate-turn
-end
-
 
 to find-flockmates  ;; turtle procedure
   set flockmates other turtles in-radius vision
