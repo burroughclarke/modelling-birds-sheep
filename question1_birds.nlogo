@@ -17,16 +17,14 @@ breed [predators predator]
 
 to setup
   clear-all
-  create-birds population
-    [ set color yellow ; - 2 + random 7  ;; random shades look nice
-      set size 2  ;; easier to see
-      setxy random-xcor random-ycor
-      set flockmates no-turtles
+  create-birds population [
+      set size 2
+      setxy 5 5
   ]
-  create-predators 1 [
+  create-predators number-of-predators [
     setxy 3 3
     set size 5
-    set color blue   ;; all predators turn red
+    set color blue
   ]
 
   reset-ticks
@@ -185,9 +183,6 @@ to turn-at-most [turn max-turn]  ;; turtle procedure
     [ rt turn ]
 end
 
-
-; Copyright 1998 Uri Wilensky.
-; See Info tab for full copyright and license.
 @#$#@#$#@
 GRAPHICS-WINDOW
 250
@@ -259,7 +254,7 @@ population
 population
 1.0
 1000.0
-179.0
+265.0
 1.0
 1
 NIL
@@ -274,7 +269,7 @@ max-align-turn
 max-align-turn
 0.0
 20.0
-13.5
+9.0
 0.25
 1
 degrees
@@ -289,7 +284,7 @@ max-cohere-turn
 max-cohere-turn
 0.0
 20.0
-9.75
+6.0
 0.25
 1
 degrees
@@ -319,7 +314,7 @@ vision
 vision
 0.0
 10.0
-6.5
+5.0
 0.5
 1
 patches
@@ -364,7 +359,7 @@ predator-speed
 predator-speed
 0
 1
-0.17
+0.27
 0.01
 1
 NIL
@@ -392,9 +387,24 @@ SWITCH
 513
 show-target-bird
 show-target-bird
-1
+0
 1
 -1000
+
+SLIDER
+13
+18
+202
+51
+number-of-predators
+number-of-predators
+0
+10
+2.0
+1
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
