@@ -28,69 +28,63 @@ to setup
     set size 5
     set color blue   ;; all predators turn red
   ]
-;   create-predators 1 [
-;    setxy -3 -3
-;    set size 2.5
-;    set color red   ;; all predators turn red
-;  ]
 
   reset-ticks
 end
 
 
 to go
-  ask birds [
-    ;; if-else proposition otherwise you are mixing the two effects; either flock or flee
 
+  ask birds [
+
+    ;; the bird checks for predators ...
     set predamates predators in-radius vision
+
+    ;; ... if bird sees a predator, activate the 'flight' response
     if any? predamates [
       set color red
       flee
     ]
+    ;; ... if bird cannot see any predators, stick to normal 'stay with the group' pattern
     if count predamates = 0 [
       set color yellow
       flock
     ]
 
-
-
-;    find-flockmates
-;    if any? flockmates [
-;      flock
-;    ]
+    fd bird-speed
   ]
-  ;; the following line is used to make the turtles animate more smoothly.
-  repeat 5 [ ask birds [ fd 0.15 ] display ]
-  repeat 5 [ ask predators [ fd 0.1 ] display ]
+  ;; The behaviour of the predator is VERY different if it moves at the SAME speed as the birds:
+  ;; if it moves at the same speed, it can purse
+  ;; the same bird for a long time, resulting it in NOT changing course
+  ;; often. But if the birds are even slightly quicker, it is forced to
+  ;; rapidly SWITCH between targets.
 
-    ask predators [
-     ; rt random 10    ;; turn right ;; lt random 10    ;; turn left
+  ask predators [
 
-    ;; predator selects from ALL birds the closest bird
+     ;; predator compares ALL the birds
      set flockmates other birds ;; !! just birds, not predators
-     set nearest-neighbor min-one-of flockmates [distance myself]
-;     print "nearest neighbor:"
-     ; show nearest-neighbor ;; 'nearest-neighbor' is a BIRD not a NUMBER
 
-     ;; 2) get angle of nearest bird
+     ;; predator selects the CLOSEST bird
+     set nearest-neighbor min-one-of flockmates [distance myself] ;;  'nearest-neighbor' is a BIRD not a NUMBER
+
+     ;; predator CALCULATES ANGLE towards closes bird
      let x-component [sin (towards myself + 180)] of nearest-neighbor
      let y-component [cos (towards myself + 180)] of nearest-neighbor
      let result atan x-component y-component
-;     print "angle to nearest bird = "
-     ; show result
 
-     ;; 3) turn towards nearest bird
-     turn-towards result 360
+     ;; predator TURNS TOWARDS closest bird
+     turn-towards result predator-target-turn
 
-     ;; 4) move towards nearest bird
-     ;; fd 0.3 ;; '1' is too fast if the prey is moving randomly around
+     ;; display the exact bird the predator is targeting (toggle switch)
+     if count links > 0 [
+       ask one-of links [ die ]
+     ]
+     if show-target-bird [
+       create-link-with nearest-neighbor
+     ]
 
-     ;; correct!
- ;    let mydist distance bird 0
- ;    print "distance to bird 0 = "
- ;    ; show mydist
+    fd predator-speed
   ]
-
 
   tick
 end
@@ -110,19 +104,16 @@ end
 ;;; FLEE
 to flee
 
-  set nearest-predator min-one-of predamates [distance myself]
-;     print "nearest predamate:"
-     ; show nearest-predator ;; 'nearest-neighbor' is a BIRD not a NUMBER
+   ;; #1: bird identifies the NEAREST predator
+   set nearest-predator min-one-of predamates [distance myself]
 
-   ;; 2) get angle of nearest predator
+   ;; #2: bird gets ANGLE of nearest predator
    let x-component [sin (towards myself + 180)] of nearest-predator
    let y-component [cos (towards myself + 180)] of nearest-predator
-   let result atan x-component y-component
-;   print "angle to predator = "
-   ; show result
+   let angle-to-predator atan x-component y-component
 
-  ;; 3) turn away from predator (the '+ 180 degrees' bit)
-  turn-towards (result + 180) max-separate-turn
+   ;; #3: bird TURNS AWAY from predator as fast as it can (as defined by 'max-seperate-turn')
+   turn-towards (angle-to-predator + 180) max-separate-turn
 end
 
 
@@ -268,7 +259,7 @@ population
 population
 1.0
 1000.0
-308.0
+179.0
 1.0
 1
 NIL
@@ -283,7 +274,7 @@ max-align-turn
 max-align-turn
 0.0
 20.0
-9.75
+13.5
 0.25
 1
 degrees
@@ -328,7 +319,7 @@ vision
 vision
 0.0
 10.0
-7.5
+6.5
 0.5
 1
 patches
@@ -348,6 +339,62 @@ minimum-separation
 1
 patches
 HORIZONTAL
+
+SLIDER
+29
+335
+201
+368
+bird-speed
+bird-speed
+0
+1
+0.1
+0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+30
+379
+202
+412
+predator-speed
+predator-speed
+0
+1
+0.17
+0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+10
+426
+225
+459
+predator-target-turn
+predator-target-turn
+0
+20
+2.5
+0.1
+1
+deg.
+HORIZONTAL
+
+SWITCH
+33
+480
+198
+513
+show-target-bird
+show-target-bird
+1
+1
+-1000
 
 @#$#@#$#@
 ## WHAT IS IT?
