@@ -1,143 +1,166 @@
-globals [ max-sheep grassA-total grassB-total grassC-total ]  ; don't let sheep population grow too large
-; Sheep and wolves are both breeds of turtle.
-breed [ sheep a-sheep ]  ; sheep is its own plural, so we use "a-sheep" as the singular.
-breed [ sheep1 a-sheep1 ]  ; sheep is its own plural, so we use "a-sheep" as the singular.
-breed [ sheep2 a-sheep2 ]  ; sheep is its own plural, so we use "a-sheep" as the singular.
+globals [
+  ; total 'living' grass in field A
+  grassA-total
+  ; total 'living' grass in field B
+  grassB-total
+  ; total 'living' grass in field C
+  grassC-total
 
-turtles-own [ energy ]       ; both wolves and sheep have energy
+  ; x_coordinate of fence between fields A and C
+  farm_a_boundary
+  ; x_coordinate of fence between fields B and C
+  farm_b_boundary
+]
+
+breed [ sheep a-sheep ]  ; sheep is its own plural, so we use "a-sheep" as the singular.
+breed [ sheep_A a-sheep_A ]
+breed [ sheep_B a-sheep_B ]
+
+turtles-own [ energy ]
 patches-own [ countdown ]
 
 to setup
   clear-all
-  ifelse netlogo-web? [set max-sheep 10000] [set max-sheep 30000]
 
-  ; Check model-version switch
-  ; if we're not modeling grass, then the sheep don't need to eat to survive
-  ; otherwise the grass's state of growth and growing logic need to be set up
+  set farm_a_boundary 30
+  set farm_b_boundary 60
 
   ask patches [
     set pcolor one-of [ green brown]
     ifelse pcolor = green
       [ set countdown grass-regrowth-time ]
     [ set countdown random grass-regrowth-time ] ; initialize grass regrowth clocks randomly for brown patches
-    if pxcor = 31 [ set pcolor red ]
-    if pxcor = 61 [ set pcolor red ]
+    if pxcor = farm_a_boundary [ set pcolor black ]
+    if pxcor = farm_b_boundary [ set pcolor black ]
   ]
 
-  create-sheep1 max-number-sheep-formerA  ; create the sheep, then initialize their variables
+  create-sheep_A initial-sheep-per-farmer  ; create the sheep, then initialize their variables
   [
     set shape  "sheep"
-    set color pink
+    set color blue
     set size 1.5  ; easier to see
-    set label-color blue - 2
-    set energy random (2 * sheep-gain-from-food)
-    ifelse farm-c-usage [
-       setxy random 60  random-ycor
-    ]
-    [
-      setxy random 30  random-ycor
-    ]
+    ; in the original  NetLogo model, a random 'starting health' for each sheep was set. This has been set as a consistent value.
+    set energy 1
+    setxy random farm_a_boundary random-ycor
   ]
 
-  create-sheep2 max-number-sheep-formerB  ; create the sheep, then initialize their variables
+  create-sheep_B initial-sheep-per-farmer  ; create the sheep, then initialize their variables
   [
     set shape  "sheep"
     set color yellow
     set size 1.5  ; easier to see
-    set label-color blue - 2
-    set energy random (2 * sheep-gain-from-food)
-    ifelse farm-c-usage [
-      setxy (random 60) + 32 random-ycor
-    ]
-    [
-      setxy (random 30) + 62 random-ycor
-    ]
+    ; in the original  NetLogo model, a random 'starting health' for each sheep was set. This has been set as a consistent value.
+    set energy 1
+    setxy (random farm_a_boundary) + farm_b_boundary random-ycor
   ]
   reset-ticks
 end
 
 to go
-  ; stop the simulation of no wolves or sheep
-  if not any? turtles [ stop ]
-  ; stop the model if there are no wolves and the number of sheep gets very large
-  if count sheep > max-sheep [ user-message "The sheep have inherited the earth" stop ]
-  ask sheep1 [
-    move1
-    set energy energy - 1  ; deduct energy for sheep only if running sheep-wolf-grass model version
-    eat-grass  ; sheep eat grass only if running sheep-wolf-grass model version
-    death ; sheep die from starvation only if running sheep-wolf-grass model version
-    reproduce-sheep  ; sheep reproduce at random rate governed by slider
+
+  ask sheep_A [
+    move_A
+    ; each movement step costs the sheep energy
+    set energy energy - 0.1
+    eat-grass
+    ; if sheep run out of energy, they die
+    death
+    ; if sheep has sufficient energy, it breeds
+    reproduce-sheep A-breed-wait
   ]
 
-  ask sheep2 [
-    move2
-    set energy energy - 1  ; deduct energy for sheep only if running sheep-wolf-grass model version
-    eat-grass  ; sheep eat grass only if running sheep-wolf-grass model version
-    death ; sheep die from starvation only if running sheep-wolf-grass model version
-    reproduce-sheep  ; sheep reproduce at random rate governed by slider
+  ask sheep_B [
+    move_B
+    ; each movement step costs the sheep energy
+    set energy energy - 0.1
+    eat-grass
+    ; if sheep run out of energy, they die
+    death
+    ; if sheep has sufficient energy, it breeds
+    reproduce-sheep B-breed-wait
   ]
 
   ask patches [ grow-grass ]
-  ;  Count grass in each feild
-  set grassC-total grassC-total + count patches with [pcolor = green and pxcor > 60]
-  set grassB-total grassB-total + count patches with [pcolor = green and  pxcor > 30 and pxcor < 61]
-  set grassA-total grassA-total + count patches with [pcolor = green and pxcor < 30]
+  ;  Count grass in each field
+  set grassC-total grassC-total + count patches with [pcolor = green and pxcor > farm_b_boundary]
+  set grassB-total grassB-total + count patches with [pcolor = green and  pxcor > farm_a_boundary and pxcor < farm_b_boundary]
+  set grassA-total grassA-total + count patches with [pcolor = green and pxcor < farm_a_boundary]
 
   ; set grass count patches with [pcolor = green]
   tick
 end
 
-to move1  ; turtle procedure
-  rt random 50
-  lt random 50
-  fd 1
-  ifelse farm-c-usage [
-    if xcor > 60 [ set xcor 0 ]
-  ][
-    ifelse farmer-a-use-farm-c [
-      if xcor > 60 [ set xcor 0 ]
-    ][
-      if xcor > 30 [ set xcor 0 ]
+; move farmer A's sheep
+to move_A
+
+    ; move sheep in 'random walk' pattern
+    random-walk
+
+    ifelse farmer-a-use-c
+    [
+      ; if sheep reach the fence, sheep bounce off the fence!
+      if xcor > farm_b_boundary [ set xcor farm_b_boundary ]
     ]
+    ; if farmer A cannot use field C: stop sheep at the field A boundary
+    [
+      if xcor > farm_a_boundary [ set xcor farm_a_boundary ]
+    ]
+
+end
+
+; move farmer B's sheep
+to move_B
+
+  ; move sheep in 'random walk' pattern
+  random-walk
+
+  ifelse farmer-b-use-c
+  [
+    ; if sheep reach the fence, sheep bounce off the fence!
+    if xcor < farm_a_boundary [ set xcor farm_a_boundary ]
   ]
-end
-
-to move2  ; turtle procedure
-  rt random 50
-  lt random 50
-  fd 1
-  ifelse farm-c-usage [
-    if xcor < 33 [ set xcor 33 ]
-  ][
-     if xcor < 62 [ set xcor 62 ]
+  ; if farmer B cannot use field C: stop sheep at the field B boundary
+  [
+     if xcor < farm_b_boundary [ set xcor farm_b_boundary ]
   ]
 
 end
 
 
-to move  ; turtle procedure
-  rt random 50
-  lt random 50
+; simplest possible pattern to simulate sheep aimlessly walking all over the field
+; in this model, sheep do not seek out available grass, they merely 'encounter' it
+to random-walk
+  rt random -50.50
   fd 1
 end
 
+
+; in the NetLogo example model, the user could set the amount of energy a sheep gained from eating the grass.
+; this was decided to add unnecessary complexity, because the user is already choosing the threshhold level at
+; which the sheep have accumulated enough energy to reproduce. For example, the model should behave the same
+; if the grass adds 1 energy to reach a threshhold of 10, or if grass adds 2 energy to reach a threshhold of 20.
+; Also, measuring the 'varying quality of grass' is not relevant to the model: what is being modelled is the effects
+; of *area* and the effect of *shared vs seperate* areas on sheep numbers, not the effect of grass quality.
 to eat-grass  ; sheep procedure
   ; sheep eat grass, turn the patch brown
   if pcolor = green [
     set pcolor brown
-    set energy energy + sheep-gain-from-food  ; sheep gain energy by eating
+    set energy energy + 1 ; sheep gain energy by eating
   ]
 end
 
-to reproduce-sheep  ; sheep procedure
-  if random-float 100 < sheep-reproduce [  ; throw "dice" to see if you will reproduce
-    set energy (energy / 2)                ; divide energy between parent and offspring
-    hatch 1 [ rt random-float 360 fd 1 ]   ; hatch an offspring and move it forward 1 step
+; in the NetLogo example model a 'random dice' mechanism was used to determine when sheep would reproduce.
+; this was decided to add unecessary complexity and 'noise' to the model without increasing the realism of the model.
+; in this model, sheep simply reproduce when they reach a certain energy level.
+to reproduce-sheep [breed-wait]
+  if energy > breed-wait [
+    set energy (energy / 2)    ; divide energy between parent and offspring
+    hatch 1                    ; hatch an offspring
   ]
 end
 
-to death  ; turtle procedure (i.e. both wolf nd sheep procedure)
-  ; when energy dips below zero, die
+to death
+  ; if energy below zero, sheep dies
   if energy < 0 [ die ]
 end
 
@@ -156,15 +179,15 @@ to-report grass
 end
 
 to-report grass1
-  report patches with [pcolor = green and pxcor < 31]
+  report patches with [pcolor = green and pxcor < farm_a_boundary]
 end
 
 to-report grass2
-  report patches with [pcolor = green and  pxcor > 30 and pxcor < 61]
+  report patches with [pcolor = green and  pxcor > farm_a_boundary and pxcor < farm_b_boundary]
 end
 
 to-report grass3
-  report patches with [pcolor = green and pxcor > 60]
+  report patches with [pcolor = green and pxcor > farm_b_boundary]
 end
 
 to-report grass1-avg
@@ -179,8 +202,6 @@ to-report grass3-avg
   report precision (grassC-total / ticks) 1
 end
 
-; Copyright 1997 Uri Wilensky.
-; See Info tab for full copyright and license.
 @#$#@#$#@
 GRAPHICS-WINDOW
 220
@@ -211,36 +232,6 @@ ticks
 
 SLIDER
 10
-190
-105
-223
-sheep-gain-from-food
-sheep-gain-from-food
-0.0
-50.0
-4.0
-1.0
-1
-NIL
-HORIZONTAL
-
-SLIDER
-110
-190
-215
-223
-sheep-reproduce
-sheep-reproduce
-1.0
-20.0
-4.0
-1.0
-1
-%
-HORIZONTAL
-
-SLIDER
-10
 155
 215
 188
@@ -248,45 +239,11 @@ grass-regrowth-time
 grass-regrowth-time
 0
 100
-29.0
+50.0
 1
 1
 NIL
 HORIZONTAL
-
-BUTTON
-160
-85
-215
-118
-setup
-setup
-NIL
-1
-T
-OBSERVER
-NIL
-S
-NIL
-NIL
-1
-
-BUTTON
-160
-120
-215
-153
-go
-go
-T
-1
-T
-OBSERVER
-NIL
-G
-NIL
-NIL
-0
 
 PLOT
 1145
@@ -304,82 +261,19 @@ true
 true
 "" ""
 PENS
-"sheep-1" 1.0 0 -4079321 true "" "plot count sheep1"
-"sheep-2" 1.0 0 -2064490 true "" "plot count sheep2"
+"sheep_A" 1.0 0 -13345367 true "" "plot count sheep_A"
+"sheep_B" 1.0 0 -4079321 true "" "plot count sheep_B"
 
 MONITOR
 10
 275
 100
 320
-sheep1
-count sheep1
+sheep A
+count sheep_A
 3
 1
 11
-
-MONITOR
-75
-225
-142
-270
-grass C
-count grass1
-3
-1
-11
-
-MONITOR
-150
-225
-215
-270
-grass B
-count grass3
-0
-1
-11
-
-SLIDER
-10
-10
-212
-43
-max-number-sheep-formerA
-max-number-sheep-formerA
-0
-1000
-952.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-10
-45
-212
-78
-max-number-sheep-formerB
-max-number-sheep-formerB
-0
-1000
-128.0
-1
-1
-NIL
-HORIZONTAL
-
-SWITCH
-10
-85
-160
-118
-farm-c-usage
-farm-c-usage
-0
-1
--1000
 
 PLOT
 10
@@ -404,11 +298,11 @@ PENS
 SWITCH
 10
 120
-160
+162
 153
-farmer-a-use-farm-c
-farmer-a-use-farm-c
-1
+farmer-a-use-c
+farmer-a-use-c
+0
 1
 -1000
 
@@ -447,19 +341,8 @@ MONITOR
 275
 215
 320
-sheep2
-count sheep2
-17
-1
-11
-
-MONITOR
-10
-225
-67
-270
-grass A
-count grass1
+sheep B
+count sheep_B
 17
 1
 11
@@ -467,9 +350,9 @@ count grass1
 MONITOR
 1155
 375
-1212
+1257
 420
-Grass A
+Grass Average
 grass1-avg
 17
 1
@@ -480,10 +363,133 @@ TEXTBOX
 350
 1325
 386
-Agerage Grass in Feilds\n
+Average Grass\n
 15
 15.0
 1
+
+BUTTON
+10
+495
+72
+528
+NIL
+setup
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+90
+495
+153
+528
+NIL
+go
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+SWITCH
+10
+85
+162
+118
+farmer-b-use-c
+farmer-b-use-c
+0
+1
+-1000
+
+SLIDER
+10
+10
+212
+43
+initial-sheep-per-farmer
+initial-sheep-per-farmer
+0
+100
+17.0
+1
+1
+NIL
+HORIZONTAL
+
+MONITOR
+1155
+430
+1217
+475
+Grass A
+count grass1
+17
+1
+11
+
+MONITOR
+1225
+430
+1287
+475
+Grass C
+count grass2
+17
+1
+11
+
+MONITOR
+1295
+430
+1352
+475
+Grass B
+count grass3
+17
+1
+11
+
+SLIDER
+0
+195
+202
+228
+B-breed-wait
+B-breed-wait
+0
+100
+5.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+0
+235
+207
+268
+A-breed-wait
+A-breed-wait
+0
+100
+100.0
+1
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
