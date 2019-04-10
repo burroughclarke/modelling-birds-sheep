@@ -6,6 +6,30 @@ globals [
   ; total 'living' grass in field C
   grassC-total
 
+  ; record of how many sheep at various points in time
+  sheep-history_A
+    ; record of how many sheep at various points in time
+  sheep-history_B
+
+  ; historical population variation for farmer A's sheep
+  sheep-variation_A
+  ; historical population variation for farmer A's sheep
+  sheep-variation_B
+
+  ; all-time total sheep owned by farmer A
+  sheepA-alltime
+  ; all-time total sheep owned by farmer B
+  sheepB-alltime
+
+
+  ; all-time total grass count in field A
+  grassA-alltime
+  ; all-time total grass count in field B
+  grassB-alltime
+  ; all-time total grass count in field C
+  grassC-alltime
+
+
   ; x_coordinate of fence between fields A and C
   farm_a_boundary
   ; x_coordinate of fence between fields B and C
@@ -22,16 +46,33 @@ patches-own [ countdown ]
 to setup
   clear-all
 
+  ; start a new 'sheep history' list
+  set sheep-history_A []
+  set sheep-history_B []
+
+  ; boundaries are set to make all fields the same size
   set farm_a_boundary 30
   set farm_b_boundary 60
 
   ask patches [
-    set pcolor one-of [ green brown]
-    ifelse pcolor = green
-      [ set countdown grass-regrowth-time ]
-    [ set countdown random grass-regrowth-time ] ; initialize grass regrowth clocks randomly for brown patches
-    if pxcor = farm_a_boundary [ set pcolor black ]
-    if pxcor = farm_b_boundary [ set pcolor black ]
+
+    ; initially, all grass is in 'grown' state
+    set pcolor green
+    set countdown grass-regrowth-time
+
+    ; draw the boundary between fields A, B, C
+    if pxcor = 0 [ set pcolor black ]
+    if pxcor = 90[ set pcolor black ]
+
+
+    if not farmer-b-use-c [
+      if pxcor = farm_b_boundary [ set pcolor black ]
+    ]
+    if not farmer-a-use-c [
+      if pxcor = farm_a_boundary [ set pcolor black ]
+    ]
+
+
   ]
 
   create-sheep_A initial-sheep-per-farmer  ; create the sheep, then initialize their variables
@@ -53,6 +94,12 @@ to setup
     set energy 1
     setxy (random farm_a_boundary) + farm_b_boundary random-ycor
   ]
+
+  ;  Count grass in each field
+  set grassC-total count patches with [pxcor > farm_b_boundary]
+  set grassB-total count patches with [pxcor > farm_a_boundary and pxcor < farm_b_boundary]
+  set grassA-total count patches with [pxcor < farm_a_boundary]
+
   reset-ticks
 end
 
@@ -80,11 +127,39 @@ to go
     reproduce-sheep B-breed-wait
   ]
 
-  ask patches [ grow-grass ]
-  ;  Count grass in each field
-  set grassC-total grassC-total + count patches with [pcolor = green and pxcor > farm_b_boundary]
-  set grassB-total grassB-total + count patches with [pcolor = green and  pxcor > farm_a_boundary and pxcor < farm_b_boundary]
-  set grassA-total grassA-total + count patches with [pcolor = green and pxcor < farm_a_boundary]
+  ask patches [
+
+    ;; check each time if the boundary conditions have changed
+    ifelse farmer-b-use-c
+       [if pxcor = farm_b_boundary [ set pcolor green ] ]
+       [if pxcor = farm_b_boundary [ set pcolor black ] ]
+
+    ifelse farmer-a-use-c
+       [if pxcor = farm_a_boundary [ set pcolor green ] ]
+       [if pxcor = farm_a_boundary [ set pcolor black ] ]
+
+    grow-grass
+  ]
+
+  ; Count farmer A's sheep (in any field) and add to the all-time total
+  set sheepA-alltime sheepA-alltime + count sheep_A
+
+  ; Count farmer A's sheep (in any field)
+  set sheepB-alltime sheepB-alltime + count sheep_B
+
+
+
+   ; Count field A's grass and add to all-time total
+  set grassA-alltime grassA-alltime + grassA-total
+
+  ; Count field B's grass and add to all-time total
+  set grassB-alltime grassB-alltime + grassB-total
+
+  ; Count field C's grass and add to all-time total
+  set grassC-alltime grassC-alltime + grassC-total
+
+  ; collect data on sheep numbers
+  measure-variation
 
   ; set grass count patches with [pcolor = green]
   tick
@@ -106,6 +181,9 @@ to move_A
       if xcor > farm_a_boundary [ set xcor farm_a_boundary ]
     ]
 
+  ;; stop 'wrap around' effect for sheep leaving the left field edge
+  if xcor < 1 [ set xcor 1]
+
 end
 
 ; move farmer B's sheep
@@ -124,13 +202,16 @@ to move_B
      if xcor < farm_b_boundary [ set xcor farm_b_boundary ]
   ]
 
+  ;; stop 'wrap around' effect for sheep leaving the right field edge
+  if xcor > 89 [ set xcor 89]
+
 end
 
 
 ; simplest possible pattern to simulate sheep aimlessly walking all over the field
 ; in this model, sheep do not seek out available grass, they merely 'encounter' it
 to random-walk
-  rt random -50.50
+  rt random -100.100
   fd 1
 end
 
@@ -174,34 +255,72 @@ to grow-grass  ; patch procedure
   ]
 end
 
+; updates data on historical sheep levels (to measure population variance over time)
+to measure-variation
+
+  ;count sheep
+  let sheep-a-current count sheep_A
+  let sheep-b-current count sheep_B
+
+  ;add the count to the list of all-time counts
+  set sheep-history_A lput sheep-a-current sheep-history_A
+  set sheep-history_B lput sheep-b-current sheep-history_B
+
+  ; if the 'variation' period is up:
+  ; a) make changes to the breeding rate
+  ; b) reset the sheep tallies to measure sheep variation in the most immediate 'time interval' only
+  if ticks mod tally-interval = 0 and ticks != 0  [
+    set sheep-history_A []
+    set sheep-history_B []
+  ]
+
+end
+
 to-report grass
   report patches with [pcolor = green]
 end
 
-to-report grass1
+to-report grassA
   report patches with [pcolor = green and pxcor < farm_a_boundary]
 end
 
-to-report grass2
+to-report grassC
   report patches with [pcolor = green and  pxcor > farm_a_boundary and pxcor < farm_b_boundary]
 end
 
-to-report grass3
+to-report grassB
   report patches with [pcolor = green and pxcor > farm_b_boundary]
 end
 
-to-report grass1-avg
-  report precision ( grassA-total / ticks) 1
+;; calculate all-time averages of sheep numbers: useful if graphs are highly fluctuating
+to-report sheepA-avg
+  report precision ( sheepA-alltime / ticks) 1
 end
 
-to-report grass2-avg
-  report precision (grassB-total / ticks) 1
+to-report sheepB-avg
+  report precision (sheepB-alltime / ticks) 1
 end
 
-to-report grass3-avg
-  report precision (grassC-total / ticks) 1
+;to-report grassC-alltimeavg
+;  report precision (grass-alltime / ticks) 1
+;end
+
+
+
+
+
+;; report the percentage of grass remaining
+to-report grassA-percent
+  report precision ((count grassA / grassA-total) * 100) 1
 end
 
+to-report grassB-percent
+  report precision ((count grassB / grassB-total) * 100) 1
+end
+
+to-report grassC-percent
+  report precision ((count grassC / grassC-total) * 100) 1
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
 220
@@ -277,23 +396,23 @@ count sheep_A
 
 PLOT
 10
-335
-210
-470
+535
+455
+805
 grass
 NIL
 NIL
 0.0
 10.0
 0.0
-10.0
+100.0
 true
 true
 "" ""
 PENS
-"grass1" 1.0 0 -14333415 true "" "plot count grass1"
-"grass2" 1.0 0 -2674135 true "" "plot count grass2"
-"grass3" 1.0 0 -7500403 true "" "plot count grass3"
+"grass A" 1.0 0 -13345367 true "" "plot grassA-percent"
+"grass B" 1.0 0 -4079321 true "" "plot grassB-percent"
+"grass C" 1.0 0 -7500403 true "" "plot grassC-percent"
 
 SWITCH
 10
@@ -302,7 +421,7 @@ SWITCH
 153
 farmer-a-use-c
 farmer-a-use-c
-0
+1
 1
 -1000
 
@@ -347,27 +466,6 @@ count sheep_B
 1
 11
 
-MONITOR
-1155
-375
-1257
-420
-Grass Average
-grass1-avg
-17
-1
-11
-
-TEXTBOX
-1155
-350
-1325
-386
-Average Grass\n
-15
-15.0
-1
-
 BUTTON
 10
 495
@@ -409,7 +507,7 @@ SWITCH
 118
 farmer-b-use-c
 farmer-b-use-c
-0
+1
 1
 -1000
 
@@ -422,7 +520,7 @@ initial-sheep-per-farmer
 initial-sheep-per-farmer
 0
 100
-17.0
+10.0
 1
 1
 NIL
@@ -431,10 +529,10 @@ HORIZONTAL
 MONITOR
 1155
 430
-1217
+1227
 475
-Grass A
-count grass1
+Grass A %
+grassA-percent
 17
 1
 11
@@ -442,10 +540,10 @@ count grass1
 MONITOR
 1225
 430
-1287
+1297
 475
-Grass C
-count grass2
+Grass C %
+grassC-percent
 17
 1
 11
@@ -453,10 +551,10 @@ count grass2
 MONITOR
 1295
 430
-1352
+1362
 475
-Grass B
-count grass3
+Grass B %
+grassB-percent
 17
 1
 11
@@ -469,8 +567,8 @@ SLIDER
 B-breed-wait
 B-breed-wait
 0
-100
-5.0
+200
+100.0
 1
 1
 NIL
@@ -484,135 +582,103 @@ SLIDER
 A-breed-wait
 A-breed-wait
 0
-100
+200
 100.0
 1
 1
 NIL
 HORIZONTAL
 
+MONITOR
+1150
+335
+1252
+380
+NIL
+sheepA-avg
+17
+1
+11
+
+MONITOR
+1255
+335
+1337
+380
+NIL
+sheepB-avg
+17
+1
+11
+
+SWITCH
+10
+50
+177
+83
+auto-stock-mgmt
+auto-stock-mgmt
+1
+1
+-1000
+
+SLIDER
+1150
+490
+1322
+523
+tally-interval
+tally-interval
+1
+1000
+500.0
+1
+1
+NIL
+HORIZONTAL
+
+MONITOR
+1155
+535
+1232
+580
+A-variance
+variance sheep-history_A
+5
+1
+11
+
+MONITOR
+1240
+535
+1317
+580
+B-variance
+variance sheep-history_B
+5
+1
+11
+
+PLOT
+1155
+590
+1355
+740
+Variance
+time
+variance
+0.0
+10.0
+0.0
+100.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -14070903 true "" "plot variance sheep-history_A"
+"pen-1" 1.0 0 -1184463 true "" "plot variance sheep-history_B"
+
 @#$#@#$#@
-## WHAT IS IT?
-
-This model explores the stability of predator-prey ecosystems. Such a system is called unstable if it tends to result in extinction for one or more species involved.  In contrast, a system is stable if it tends to maintain itself over time, despite fluctuations in population sizes.
-
-## HOW IT WORKS
-
-There are two main variations to this model.
-
-In the first variation, the "sheep-wolves" version, wolves and sheep wander randomly around the landscape, while the wolves look for sheep to prey on. Each step costs the wolves energy, and they must eat sheep in order to replenish their energy - when they run out of energy they die. To allow the population to continue, each wolf or sheep has a fixed probability of reproducing at each time step. In this variation, we model the grass as "infinite" so that sheep always have enough to eat, and we don't explicitly model the eating or growing of grass. As such, sheep don't either gain or lose energy by eating or moving. This variation produces interesting population dynamics, but is ultimately unstable. This variation of the model is particularly well-suited to interacting species in a rich nutrient environment, such as two strains of bacteria in a petri dish (Gause, 1934).
-
-The second variation, the "sheep-wolves-grass" version explictly models grass (green) in addition to wolves and sheep. The behavior of the wolves is identical to the first variation, however this time the sheep must eat grass in order to maintain their energy - when they run out of energy they die. Once grass is eaten it will only regrow after a fixed amount of time. This variation is more complex than the first, but it is generally stable. It is a closer match to the classic Lotka Volterra population oscillation models. The classic LV models though assume the populations can take on real values, but in small populations these models underestimate extinctions and agent-based models such as the ones here, provide more realistic results. (See Wilensky & Rand, 2015; chapter 4).
-
-The construction of this model is described in two papers by Wilensky & Reisman (1998; 2006) referenced below.
-
-## HOW TO USE IT
-
-1. Set the model-version chooser to "sheep-wolves-grass" to include grass eating and growth in the model, or to "sheep-wolves" to only include wolves (black) and sheep (white).
-2. Adjust the slider parameters (see below), or use the default settings.
-3. Press the SETUP button.
-4. Press the GO button to begin the simulation.
-5. Look at the monitors to see the current population sizes
-6. Look at the POPULATIONS plot to watch the populations fluctuate over time
-
-Parameters:
-MODEL-VERSION: Whether we model sheep wolves and grass or just sheep and wolves
-INITIAL-NUMBER-SHEEP: The initial size of sheep population
-INITIAL-NUMBER-WOLVES: The initial size of wolf population
-SHEEP-GAIN-FROM-FOOD: The amount of energy sheep get for every grass patch eaten (Note this is not used in the sheep-wolves model version)
-WOLF-GAIN-FROM-FOOD: The amount of energy wolves get for every sheep eaten
-SHEEP-REPRODUCE: The probability of a sheep reproducing at each time step
-WOLF-REPRODUCE: The probability of a wolf reproducing at each time step
-GRASS-REGROWTH-TIME: How long it takes for grass to regrow once it is eaten (Note this is not used in the sheep-wolves model version)
-SHOW-ENERGY?: Whether or not to show the energy of each animal as a number
-
-Notes:
-- one unit of energy is deducted for every step a wolf takes
-- when running the sheep-wolves-grass model version, one unit of energy is deducted for every step a sheep takes
-
-There are three monitors to show the populations of the wolves, sheep and grass and a populations plot to display the population values over time.
-
-If there are no wolves left and too many sheep, the model run stops.
-
-## THINGS TO NOTICE
-
-When running the sheep-wolves model variation, watch as the sheep and wolf populations fluctuate. Notice that increases and decreases in the sizes of each population are related. In what way are they related? What eventually happens?
-
-In the sheep-wolves-grass model variation, notice the green line added to the population plot representing fluctuations in the amount of grass. How do the sizes of the three populations appear to relate now? What is the explanation for this?
-
-Why do you suppose that some variations of the model might be stable while others are not?
-
-## THINGS TO TRY
-
-Try adjusting the parameters under various settings. How sensitive is the stability of the model to the particular parameters?
-
-Can you find any parameters that generate a stable ecosystem in the sheep-wolves model variation?
-
-Try running the sheep-wolves-grass model variation, but setting INITIAL-NUMBER-WOLVES to 0. This gives a stable ecosystem with only sheep and grass. Why might this be stable while the variation with only sheep and wolves is not?
-
-Notice that under stable settings, the populations tend to fluctuate at a predictable pace. Can you find any parameters that will speed this up or slow it down?
-
-## EXTENDING THE MODEL
-
-There are a number ways to alter the model so that it will be stable with only wolves and sheep (no grass). Some will require new elements to be coded in or existing behaviors to be changed. Can you develop such a version?
-
-Try changing the reproduction rules -- for example, what would happen if reproduction depended on energy rather than being determined by a fixed probability?
-
-Can you modify the model so the sheep will flock?
-
-Can you modify the model so that wolves actively chase sheep?
-
-## NETLOGO FEATURES
-
-Note the use of breeds to model two different kinds of "turtles": wolves and sheep. Note the use of patches to model grass.
-
-Note use of the ONE-OF agentset reporter to select a random sheep to be eaten by a wolf.
-
-## RELATED MODELS
-
-Look at Rabbits Grass Weeds for another model of interacting populations with different rules.
-
-## CREDITS AND REFERENCES
-
-Wilensky, U. & Reisman, K. (1998). Connected Science: Learning Biology through Constructing and Testing Computational Theories -- an Embodied Modeling Approach. International Journal of Complex Systems, M. 234, pp. 1 - 12. (The Wolf-Sheep-Predation model is a slightly extended version of the model described in the paper.)
-
-Wilensky, U. & Reisman, K. (2006). Thinking like a Wolf, a Sheep or a Firefly: Learning Biology through Constructing and Testing Computational Theories -- an Embodied Modeling Approach. Cognition & Instruction, 24(2), pp. 171-209. http://ccl.northwestern.edu/papers/wolfsheep.pdf .
-
-Wilensky, U., & Rand, W. (2015). An introduction to agent-based modeling: Modeling natural, social and engineered complex systems with NetLogo. Cambridge, MA: MIT Press.
-
-Lotka, A. J. (1925). Elements of physical biology. New York: Dover.
-
-Volterra, V. (1926, October 16). Fluctuations in the abundance of a species considered mathematically. Nature, 118, 558–560.
-
-Gause, G. F. (1934). The struggle for existence. Baltimore: Williams & Wilkins.
-
-## HOW TO CITE
-
-If you mention this model or the NetLogo software in a publication, we ask that you include the citations below.
-
-For the model itself:
-
-* Wilensky, U. (1997).  NetLogo Wolf Sheep Predation model.  http://ccl.northwestern.edu/netlogo/models/WolfSheepPredation.  Center for Connected Learning and Computer-Based Modeling, Northwestern University, Evanston, IL.
-
-Please cite the NetLogo software as:
-
-* Wilensky, U. (1999). NetLogo. http://ccl.northwestern.edu/netlogo/. Center for Connected Learning and Computer-Based Modeling, Northwestern University, Evanston, IL.
-
-## COPYRIGHT AND LICENSE
-
-Copyright 1997 Uri Wilensky.
-
-![CC BY-NC-SA 3.0](http://ccl.northwestern.edu/images/creativecommons/byncsa.png)
-
-This work is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 3.0 License.  To view a copy of this license, visit https://creativecommons.org/licenses/by-nc-sa/3.0/ or send a letter to Creative Commons, 559 Nathan Abbott Way, Stanford, California 94305, USA.
-
-Commercial licenses are also available. To inquire about commercial licenses, please contact Uri Wilensky at uri@northwestern.edu.
-
-This model was created as part of the project: CONNECTED MATHEMATICS: MAKING SENSE OF COMPLEX PHENOMENA THROUGH BUILDING OBJECT-BASED PARALLEL MODELS (OBPML).  The project gratefully acknowledges the support of the National Science Foundation (Applications of Advanced Technologies Program) -- grant numbers RED #9552950 and REC #9632612.
-
-This model was converted to NetLogo as part of the projects: PARTICIPATORY SIMULATIONS: NETWORK-BASED DESIGN FOR SYSTEMS LEARNING IN CLASSROOMS and/or INTEGRATED SIMULATION AND MODELING ENVIRONMENT. The project gratefully acknowledges the support of the National Science Foundation (REPP & ROLE programs) -- grant numbers REC #9814682 and REC-0126227. Converted from StarLogoT to NetLogo, 2000.
-
-<!-- 1997 2000 -->
 @#$#@#$#@
 default
 true
